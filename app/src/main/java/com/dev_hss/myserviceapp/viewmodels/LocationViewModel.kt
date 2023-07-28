@@ -10,7 +10,19 @@ class LocationViewModel : ViewModel() {
     val currentLocation: LiveData<Location>
         get() = mCurrentLocation
 
+    private val mTriggerProcess = MutableLiveData<Boolean>()
+    val triggerProcess: LiveData<Boolean>
+        get() = mTriggerProcess
+
     fun updateLocation(location: Location) {
         mCurrentLocation.value = location
+    }
+
+    fun triggerProcess() {
+        mTriggerProcess.value = true
+    }
+
+    fun processDone() {
+        mTriggerProcess.value = false
     }
 }

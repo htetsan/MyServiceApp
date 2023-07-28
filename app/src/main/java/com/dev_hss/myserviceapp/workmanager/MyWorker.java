@@ -12,10 +12,16 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
+import androidx.work.Constraints;
+import androidx.work.Data;
+import androidx.work.NetworkType;
+import androidx.work.OneTimeWorkRequest;
+import androidx.work.WorkManager;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 
 import com.dev_hss.myserviceapp.R;
+import com.dev_hss.myserviceapp.utils.LocationLiveData;
 import com.dev_hss.myserviceapp.viewmodels.LocationViewModel;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
@@ -32,6 +38,7 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 public class MyWorker extends Worker {
 
@@ -61,11 +68,12 @@ public class MyWorker extends Worker {
 	 */
 	private FusedLocationProviderClient mFusedLocationClient;
 
-	private Context mContext;
+	private final Context mContext;
 	/**
 	 * Callback for changes in location.
 	 */
 	private LocationCallback mLocationCallback;
+	private Data outputData;
 
 	public MyWorker(@NonNull Context context, @NonNull WorkerParameters workerParams) {
 		super(context, workerParams);
@@ -117,7 +125,25 @@ public class MyWorker extends Worker {
 										if (mLocation != null) {
 											LocationViewModel locationViewModel = new LocationViewModel();
 											locationViewModel.updateLocation(mLocation);
+											outputData = new Data.Builder()
+													.putDouble("latitude", mLocation.getLatitude())
+													.putDouble("longitude", mLocation.getLongitude())
+													.build();
+											Log.d(TAG, "onComplete: " + outputData);
+											locationViewModel.triggerProcess();
+
+											LocationLiveData locationLiveData = LocationLiveData.Companion.getInstance(mContext);
+											locationLiveData.postValue(mLocation);
+
+											// Schedule the next location update after 5 minutes
+											scheduleNextLocationUpdate();
 										}
+
+
+										//Location location = new Location("dummy");
+										// Set the output data to pass the location to MainActivity
+
+										// Pass the outputData to the LiveDataWorker or OneTimeWorkRequest
 
 										// Create the NotificationChannel, but only on API 26+ because
 										// the NotificationChannel class is new and not in the support library
@@ -167,7 +193,6 @@ public class MyWorker extends Worker {
 		} catch (ParseException ignored) {
 
 		}
-
 		return Result.success();
 	}
 
@@ -189,5 +214,18 @@ public class MyWorker extends Worker {
 			e.printStackTrace();
 		}
 		return strAdd;
+	}
+
+	private void scheduleNextLocationUpdate() {
+		Constraints constraints = new Constraints.Builder()
+				.setRequiredNetworkType(NetworkType.CONNECTED)
+				.build();
+
+		OneTimeWorkRequest locationWorkRequest = new OneTimeWorkRequest.Builder(MyWorker.class)
+				.setInitialDelay(2, TimeUnit.MINUTES) // Schedule after 5 minutes
+				.setConstraints(constraints)
+				.build();
+
+		WorkManager.getInstance(mContext).enqueue(locationWorkRequest);
 	}
 }
